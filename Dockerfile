@@ -1,2 +1,3 @@
 # Add this line to install the postgresql driver
-RUN pip install psycopg2-binary
+COPY requirements.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt
