@@ -65,10 +65,12 @@ services:
     volumes:
       - superset_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES:-superset}"]
+      # Use a shell command to check readiness, with more retries
+      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES:-superset} -d ${POSTGRES_DB:-superset-db}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s # Allows extra time for Postgres to initialize
     networks:
       - tradebase_net
 
