@@ -1,0 +1,49 @@
+services:
+  # Cube Semantic Layer
+  cube:
+    image: cubejs/cube:latest
+    container_name: cube_app
+    ports:
+      - "4000:4000"
+      - "15432:15432" 
+    environment:
+      - NODE_ENV=${NODE_ENV} 
+      - CUBEJS_DEV_MODE=true
+      - CUBEJS_DB_TYPE=postgres
+      - CUBEJS_DB_HOST=187.127.189.166
+      - CUBEJS_DB_PORT=${CUBEJS_DB_PORT}
+      - CUBEJS_DB_NAME=${CUBEJS_DB_NAME}
+      - CUBEJS_DB_USER=${CUBEJS_DB_USER}
+      - CUBEJS_DB_PASS=postgres
+      - CUBEJS_API_SECRET=${CUBEJS_API_SECRET}
+    volumes:
+      - ./cube:/cube/conf
+    networks:
+      - tradebase_net
+    restart: unless-stopped
+
+  # Apache Superset
+  superset:
+    image: apache/superset:latest
+    container_name: superset_app
+    ports:
+      - "7088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: "change_this_to_a_long_random_string"
+      SQLALCHEMY_DATABASE_URI: postgresql://postgres:postgres@tradebase_timescaledb:5432/superset_metadata
+    user: "root"
+    command: >
+      bash -c "
+        superset db upgrade &&
+        superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin &&
+        superset init &&
+        /usr/bin/run-server.sh
+      "
+    networks:
+      - tradebase_net
+    restart: unless-stopped
+
+networks:
+  tradebase_net:
+    name: itrade-tradebase-e8sqag_tradebase_network
+    external: true
