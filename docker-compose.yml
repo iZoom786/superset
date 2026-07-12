@@ -23,7 +23,7 @@ services:
 
   # Apache Superset
   superset:
-    image: apache/superset:latest
+    image: amancevice/superset:6.0.0
     restart: unless-stopped
     ports:
       - "7088:8088"
