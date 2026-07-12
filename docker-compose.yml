@@ -2,47 +2,169 @@ services:
   # Cube Semantic Layer
   cube:
     image: cubejs/cube:latest
-    container_name: cube_app_git
+    restart: unless-stopped
+
     ports:
       - "4000:4000"
-      - "15432:15432" 
+      - "15432:15432"
+
     environment:
-      - NODE_ENV=${NODE_ENV} 
-      - CUBEJS_DEV_MODE=true
-      - CUBEJS_DB_TYPE=postgres
-      - CUBEJS_DB_HOST=187.127.189.166
-      - CUBEJS_DB_PORT=${CUBEJS_DB_PORT}
-      - CUBEJS_DB_NAME=${CUBEJS_DB_NAME}
-      - CUBEJS_DB_USER=${CUBEJS_DB_USER}
-      - CUBEJS_DB_PASS=postgres
-      - CUBEJS_API_SECRET=${CUBEJS_API_SECRET}
+      NODE_ENV: ${NODE_ENV:-production}
+      CUBEJS_DEV_MODE: true
+
+      CUBEJS_DB_TYPE: postgres
+      CUBEJS_DB_HOST: 187.127.189.166
+      CUBEJS_DB_PORT: ${CUBEJS_DB_PORT:-5432}
+      CUBEJS_DB_NAME: ${CUBEJS_DB_NAME:-tradebase}
+      CUBEJS_DB_USER: ${CUBEJS_DB_USER:-postgres}
+      CUBEJS_DB_PASS: postgres
+
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+
     volumes:
       - ./cube:/cube/conf
+
     networks:
       - tradebase_net
-    restart: unless-stopped
+
 
   # Apache Superset
   superset:
-    #image: apache/superset:latest
-    build: .
-    container_name: superset_app_git
+    image: amancevice/superset:6.0.0
+    restart: unless-stopped
+
     ports:
       - "7088:8088"
+
     environment:
-      SUPERSET_SECRET_KEY: "change_this_to_a_long_random_string"
-      SQLALCHEMY_DATABASE_URI: postgresql://postgres:postgres@tradebase_timescaledb:5432/superset_metadata
-    user: "root"
-    command: >
-      bash -c "
-        superset db upgrade &&
-        superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin &&
-        superset init &&
-        /usr/bin/run-server.sh
-      "
+      SECRET_KEY: ${SERVICE_BASE64_64_SUPERSETSECRETKEY}
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-}
+
+      POSTGRES_USER: ${SERVICE_USER_POSTGRES:-superset}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: ${POSTGRES_DB:-superset-db}
+      POSTGRES_HOST: superset-postgres
+      POSTGRES_PORT: "5432"
+
+      REDIS_HOST: superset-redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS}
+
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@example.com}
+      SUPERSET_ADMIN_FIRSTNAME: ${SUPERSET_ADMIN_FIRSTNAME:-Admin}
+      SUPERSET_ADMIN_LASTNAME: ${SUPERSET_ADMIN_LASTNAME:-User}
+
+      SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
+
+    volumes:
+      - type: bind
+        source: ./superset/superset_config.py
+        target: /etc/superset/superset_config.py
+        read_only: true
+
+    depends_on:
+      superset-postgres:
+        condition: service_healthy
+      superset-redis:
+        condition: service_healthy
+
+    command:
+      - /bin/sh
+      - -c
+      - |
+        superset db upgrade
+
+        superset fab create-admin \
+          --username "$${SUPERSET_ADMIN_USERNAME}" \
+          --firstname "$${SUPERSET_ADMIN_FIRSTNAME}" \
+          --lastname "$${SUPERSET_ADMIN_LASTNAME}" \
+          --email "$${SUPERSET_ADMIN_EMAIL}" \
+          --password "$${SUPERSET_ADMIN_PASSWORD}" || true
+
+        superset init
+        exec gunicorn \
+          --bind 0.0.0.0:8088 \
+          --workers 4 \
+          --worker-class gthread \
+          --threads 20 \
+          --timeout 120 \
+          "superset.app:create_app()"
+
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://127.0.0.1:8088/health
+      interval: 10s
+      timeout: 20s
+      retries: 15
+      start_period: 60s
+
     networks:
       - tradebase_net
+
+
+  # Superset metadata database
+  superset-postgres:
+    image: postgres:18
     restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${SERVICE_USER_POSTGRES:-superset}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: ${POSTGRES_DB:-superset-db}
+
+    volumes:
+      - superset_postgres_data:/var/lib/postgresql
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 10s
+      retries: 15
+
+    networks:
+      - tradebase_net
+
+
+  # Superset cache and async backend
+  superset-redis:
+    image: redis:8
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${SERVICE_PASSWORD_REDIS}
+
+    volumes:
+      - superset_redis_data:/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG
+      environment:
+        REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS}
+      interval: 5s
+      timeout: 10s
+      retries: 15
+
+    networks:
+      - tradebase_net
+
+
+volumes:
+  superset_postgres_data:
+  superset_redis_data:
+
 
 networks:
   tradebase_net:
