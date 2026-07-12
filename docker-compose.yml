@@ -56,24 +56,20 @@ services:
 
   # Superset metadata database
   superset-postgres:
-    image: postgres:18
-    restart: unless-stopped
+    image: 'postgres:18'
     environment:
-      POSTGRES_USER: ${SERVICE_USER_POSTGRES:-superset}
-      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
-      POSTGRES_DB: ${POSTGRES_DB:-superset-db}
+      - 'POSTGRES_USER=${SERVICE_USER_POSTGRES}'
+      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}'
+      - 'POSTGRES_DB=${POSTGRES_DB:-superset-db}'
     volumes:
-      - superset_postgres_data:/var/lib/postgresql/data
+      - 'superset_postgres_data:/var/lib/postgresql'
     healthcheck:
-      # Use a shell command to check readiness, with more retries
-      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES:-superset} -d ${POSTGRES_DB:-superset-db}"]
-      interval: 10s
-      timeout: 5s
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
+      interval: 5s
+      timeout: 20s
       retries: 10
-      start_period: 30s # Allows extra time for Postgres to initialize
-    networks:
-      - tradebase_net
-
   # Superset cache and async backend
   superset-redis:
     image: redis:8
