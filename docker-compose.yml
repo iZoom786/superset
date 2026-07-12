@@ -50,7 +50,7 @@ services:
         condition: service_healthy
       superset-redis:
         condition: service_healthy
-    command: ["/bin/sh", "-c", "/app/docker-bootstrap.sh app-gunicorn"]
+    command: ["/bin/sh", "-c", "superset db upgrade && superset init && gunicorn --bind 0.0.0.0:8088 --workers 4 --worker-class gthread --threads 20 --timeout 120 'superset.app:create_app()'"]
     networks:
       - tradebase_net
 
