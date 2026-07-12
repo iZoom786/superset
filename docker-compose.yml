@@ -37,6 +37,7 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_HOST: superset-redis
       REDIS_PORT: "6379"
+      # These match your Python config keys:
       REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS}
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
