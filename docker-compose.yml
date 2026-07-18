@@ -89,10 +89,10 @@ volumes:
   superset_postgres_data:
   superset_redis_data:
 
-#networks:
-  #tradebase_net:
-    #driver: bridge
 networks:
   tradebase_net:
-    external: true
-    name: itrade-tradebase-e8sqag_tradebase_network    
+    driver: bridge
+# networks:
+  # tradebase_net:
+    # external: true
+    # name: itrade-tradebase-e8sqag_tradebase_network    
