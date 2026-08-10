@@ -6,7 +6,7 @@ from urllib.parse import quote_plus
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ⭐ DISABLE AUTHKIT ROLE RECONCILER COMPLETELY
+# ⭐ COMPLETELY DISABLE AUTHKIT ROLE RECONCILER
 # ============================================================
 
 SAK_DISABLE_RECONCILER = True
@@ -16,6 +16,7 @@ SAK_DISABLE_RECONCILER = True
 # ============================================================
 
 ENABLE_OAUTH = True
+AUTH_TYPE = "oauth"  # ⭐ Explicitly set OAuth type
 
 # ============================================================
 # BASE CONFIGURATION
@@ -58,7 +59,7 @@ FEATURE_FLAGS = {
 }
 
 # ============================================================
-# OAUTH ROLE MAPPING
+# OAUTH PROVIDERS & ROLE MAPPING
 # ============================================================
 
 OAUTH_PROVIDERS = [
@@ -79,7 +80,7 @@ OAUTH_PROVIDERS = [
 ]
 
 def get_oauth_user_info(provider, response=None):
-    """Map JWT claims to Superset user and role."""
+    """Map JWT claims to Superset user and role (called by Superset)."""
     if provider == "supabase":
         token = response.get("access_token")
         if not token:
@@ -92,7 +93,7 @@ def get_oauth_user_info(provider, response=None):
             )
             app_metadata = payload.get("app_metadata", {}) or payload.get("raw_app_meta_data", {})
             
-            # Role mapping
+            # ⭐ ROLE MAPPING
             role_mapping = {
                 "authenticated": "Gamma",
                 "owner": "Admin",
@@ -118,7 +119,7 @@ def get_oauth_user_info(provider, response=None):
     return {}
 
 # ============================================================
-# SUPABASE JWT AUTHENTICATION (Minimal)
+# ⭐ MINIMAL AUTHKIT SETUP (NO ROLE RECONCILER)
 # ============================================================
 
 from superset.security import SupersetSecurityManager
@@ -139,7 +140,7 @@ _jwt_provider = CustomJwtProvider(
     algorithms=["HS256"],
 )
 
-# ⭐ Minimal security manager (no role mapper)
+# ⭐ NO role_mapper - let Superset's OAuth handle roles
 CUSTOM_SECURITY_MANAGER = build_manager(
     SupersetSecurityManager,
     identity_provider=_jwt_provider,
@@ -149,7 +150,7 @@ BLUEPRINTS = [create_sso_blueprint()]
 FLASK_APP_MUTATOR = init_app
 
 # ============================================================
-# AUTH BLUEPRINT
+# AUTH BLUEPRINT (SSO Endpoints)
 # ============================================================
 
 from flask import Blueprint, request, redirect, session
