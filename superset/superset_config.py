@@ -96,19 +96,19 @@ _jwt_provider = CustomJwtProvider(
 )
 
 # ============================================================
-# ROLE MAPPING
+# FIXED: ROLE MAPPING (With proper role names)
 # ============================================================
 
 ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
 
 _role_mapper = RoleMapper(
     mapping={
-        "owner": ["Admin"],
-        "admin": ["Admin"],
-        "member": ["Alpha"],
-        "viewer": ["Gamma"],
+        "owner": "Admin",        # Changed from ["Admin"] to "Admin"
+        "admin": "Admin",
+        "member": "Alpha",
+        "viewer": "Gamma",
     },
-    default_roles=("Gamma",),
+    default_roles="Gamma",       # Changed from ("Gamma",) to "Gamma"
     allowed_roles=ALLOWED_ROLES,
     allow_native_admin=True,
 )
