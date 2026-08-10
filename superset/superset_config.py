@@ -141,10 +141,10 @@ JINJA_CONTEXT_ADDONS = {
 }
 
 # ============================================================
-# ⭐ FIXED: CUSTOM BLUEPRINT (No current_app usage)
+# ⭐ CUSTOM BLUEPRINT FOR AUTH
 # ============================================================
 
-from flask import Blueprint, request, redirect, session
+from flask import Blueprint, request, redirect, session, jsonify
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -168,6 +168,7 @@ def unauthorized():
                 border-radius: 5px;
                 margin-top: 20px;
             }
+            .btn:hover { background: #2980b9; }
         </style>
     </head>
     <body>
@@ -175,7 +176,9 @@ def unauthorized():
             <h1>🔒 Subscription Required</h1>
             <p>You need to subscribe to Superset to access this service.</p>
             <p>Please subscribe through your account settings.</p>
-            <a href="https://app.revoseek.com/subscription" class="btn">Subscribe Now</a>
+            <a href="https://www.primelakehouse.com/subscription" class="btn">Subscribe Now</a>
+            <br>
+            <a href="https://www.primelakehouse.com" class="btn" style="background: #2ecc71; margin-top: 10px;">Go to Dashboard</a>
         </div>
     </body>
     </html>
@@ -183,10 +186,10 @@ def unauthorized():
 
 @auth_bp.route('/sso')
 def sso_callback():
-    """Handle SSO callback from your app"""
+    """Handle SSO callback from PrimeLakeHouse app"""
     token = request.args.get('token')
     if not token:
-        return redirect('https://app.revoseek.com/login')
+        return redirect('https://www.primelakehouse.com/login?return_to=https://bi.revoseek.com/auth/sso')
     
     try:
         payload = jwt.decode(
@@ -215,25 +218,43 @@ def sso_callback():
         response.set_cookie('access_token', token, httponly=True, secure=True)
         return response
         
+    except jwt.ExpiredSignatureError:
+        return redirect('https://www.primelakehouse.com/login?reason=expired')
     except Exception as e:
         logger.error(f"SSO error: {str(e)}")
-        return redirect('https://app.revoseek.com/login')
+        return redirect('https://www.primelakehouse.com/login')
 
 @auth_bp.route('/login')
 def custom_login_redirect():
-    """Redirect all login attempts to SSO"""
+    """Redirect all login attempts to PrimeLakeHouse"""
     if session.get('user'):
         return redirect('/superset/dashboard/')
-    return redirect('https://app.revoseek.com/login?return_to=https://bi.revoseek.com/auth/sso')
+    return redirect('https://www.primelakehouse.com/login?return_to=https://bi.revoseek.com/auth/sso')
 
 # ⭐ Register the blueprint
 BLUEPRINTS.append(auth_bp)
 
 # ============================================================
-# DISABLE NATIVE LOGIN
+# ⭐ DISABLE NATIVE LOGIN (Important!)
 # ============================================================
 
-# Disable Superset's built-in login
+# Disable Superset's built-in login form
 AUTH_ROLE_PUBLIC = None
 PUBLIC_ROLE_LIKE_GAMMA = False
 ENABLE_OAUTH = False
+
+# Prevent user creation via UI
+CUSTOM_SECURITY_MANAGER = build_manager(
+    SupersetSecurityManager,
+    identity_provider=_jwt_provider,
+    role_mapper=_role_mapper,
+    # Disable default login view
+    auth_view_class=None,
+)
+
+# ============================================================
+# LOGOUT REDIRECT
+# ============================================================
+
+# Redirect logout to PrimeLakeHouse
+LOGOUT_REDIRECT_URL = 'https://www.primelakehouse.com/logout'
