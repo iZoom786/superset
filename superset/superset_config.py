@@ -96,22 +96,26 @@ _jwt_provider = CustomJwtProvider(
 )
 
 # ============================================================
-# FIXED: ROLE MAPPING (With proper role names)
+# FIXED: ROLE MAPPING
 # ============================================================
 
-ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
+# Option 1: Disable role reconciler entirely
+SAK_DISABLE_RECONCILER = True
 
-_role_mapper = RoleMapper(
-    mapping={
-        "owner": "Admin",        # Changed from ["Admin"] to "Admin"
-        "admin": "Admin",
-        "member": "Alpha",
-        "viewer": "Gamma",
-    },
-    default_roles="Gamma",       # Changed from ("Gamma",) to "Gamma"
-    allowed_roles=ALLOWED_ROLES,
-    allow_native_admin=True,
-)
+# Option 2: Or fix the mapping
+# ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
+# 
+# _role_mapper = RoleMapper(
+#     mapping={
+#         "owner": ["Admin"],
+#         "admin": ["Admin"],
+#         "member": ["Alpha"],
+#         "viewer": ["Gamma"],
+#     },
+#     default_roles=("Gamma",),
+#     allowed_roles=ALLOWED_ROLES,
+#     allow_native_admin=True,
+# )
 
 # ============================================================
 # ⭐ FIXED: CUSTOM SECURITY MANAGER (No auth_view_class)
