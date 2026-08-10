@@ -37,12 +37,13 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_HOST: superset-redis
       REDIS_PORT: "6379"
-      # These match your Python config keys:
       REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS}
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
       SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@example.com}
       SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
+      # ⭐ NEW: Add this line
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
     volumes:
       - ./superset/superset_config.py:/etc/superset/superset_config.py:ro
     depends_on:
@@ -50,7 +51,8 @@ services:
         condition: service_healthy
       superset-redis:
         condition: service_healthy
-    command: ["/bin/sh", "-c", "superset db upgrade && superset init && gunicorn --bind 0.0.0.0:8088 --workers 4 --worker-class gthread --threads 20 --timeout 120 'superset.app:create_app()'"]
+    # ⭐ UPDATED: Added pip install and authkit provision-roles
+    command: ["/bin/sh", "-c", "pip install superset-auth-kit[api,redis] && superset db upgrade && superset authkit provision-roles && superset init && gunicorn --bind 0.0.0.0:8088 --workers 4 --worker-class gthread --threads 20 --timeout 120 'superset.app:create_app()'"]
     networks:
       - tradebase_net
 
