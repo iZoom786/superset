@@ -71,13 +71,13 @@ FEATURE_FLAGS = {
 }
 
 # ============================================================
-# SUPABASE JWT AUTHENTICATION (CORRECT IMPORTS)
+# SUPABASE JWT AUTHENTICATION
 # ============================================================
 
 from superset.security import SupersetSecurityManager
 from superset_auth_kit.api.blueprint import create_sso_blueprint, init_app
 from superset_auth_kit.providers.jwt import JwtProvider
-from superset_auth_kit.security.manager import build_manager  # ⭐ CORRECT IMPORT
+from superset_auth_kit.security.manager import build_manager
 from superset_auth_kit.sync.role_mapper import RoleMapper
 from superset_auth_kit.tenant.context import TenantContext
 
@@ -154,12 +154,15 @@ JINJA_CONTEXT_ADDONS = {
 }
 
 # ============================================================
-# SUBSCRIPTION CHECK (Optional - Add if needed)
+# ⭐ FIXED: SUBSCRIPTION CHECK - Using Flask app directly
 # ============================================================
 
-from flask import request, redirect, session, g
+from flask import Flask, request, redirect, session, g, jsonify
 from functools import wraps
-from superset import app as superset_app
+
+# Get the Flask app instance - THIS IS THE FIX
+# Instead of importing superset.app, we let Flask handle it
+# The config is imported by superset, so we need to use the app context
 
 def check_subscription():
     """Check if user has subscribed to Superset"""
@@ -199,10 +202,19 @@ def requires_subscription(f):
     return decorated
 
 # ============================================================
-# UNAUTHORIZED ROUTE
+# CUSTOM ROUTES - Use Flask's current_app
 # ============================================================
 
-@superset_app.route('/auth/unauthorized')
+# We cannot define routes directly in config file.
+# Instead, use Flask's app context or blueprint.
+# The recommended way is to use the BLUEPRINTS mechanism.
+
+# Create a custom blueprint for auth routes
+from flask import Blueprint
+
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+@auth_bp.route('/unauthorized')
 def unauthorized():
     return """
     <!DOCTYPE html>
@@ -235,10 +247,9 @@ def unauthorized():
     </html>
     """
 
-# ============================================================
-# OVERRIDE LOGIN PAGE
-# ============================================================
-
-@superset_app.route('/login/', methods=['GET', 'POST'])
+@auth_bp.route('/login')
 def custom_login():
     return redirect('https://app.revoseek.com/login?return_to=https://bi.revoseek.com/auth/sso')
+
+# ⭐ Register the blueprint
+BLUEPRINTS.append(auth_bp)
