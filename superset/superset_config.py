@@ -82,7 +82,7 @@ class CustomJwtProvider(JwtProvider):
     def get_claims(self, payload):
         claims = super().get_claims(payload)
         
-        # Read from app_metadata (correct location)
+        # Read from app_metadata
         app_metadata = payload.get("app_metadata", {})
         claims["role"] = app_metadata.get("tenant_role", "viewer")
         claims["tenant_id"] = app_metadata.get("tenant_id")
@@ -96,7 +96,7 @@ _jwt_provider = CustomJwtProvider(
 )
 
 # ============================================================
-# ROLE MAPPING (With allowed_roles)
+# ROLE MAPPING (With allow_native_admin=True)
 # ============================================================
 
 # Define allowed Superset roles
@@ -111,6 +111,7 @@ _role_mapper = RoleMapper(
     },
     default_roles=("Gamma",),
     allowed_roles=ALLOWED_ROLES,
+    allow_native_admin=True,  # ⭐ FIX: Allows mapping to Admin
 )
 
 # ============================================================
