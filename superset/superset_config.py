@@ -6,6 +6,18 @@ from urllib.parse import quote_plus
 logger = logging.getLogger(__name__)
 
 # ============================================================
+# ⭐ FIXED: Enable role reconciler (was False)
+# ============================================================
+
+SAK_DISABLE_RECONCILER = False
+
+# ============================================================
+# ⭐ FIXED: ENABLE OAUTH (was False - CRITICAL FOR SSO!)
+# ============================================================
+
+ENABLE_OAUTH = True
+
+# ============================================================
 # BASE CONFIGURATION
 # ============================================================
 
@@ -67,7 +79,65 @@ FEATURE_FLAGS = {
 }
 
 # ============================================================
-# SUPABASE JWT AUTHENTICATION
+# OAUTH ROLE MAPPING
+# ============================================================
+
+OAUTH_PROVIDERS = [
+    {
+        "name": "supabase",
+        "icon": "fa-database",
+        "token_key": "access_token",
+        "remote_app": {
+            "client_id": "",
+            "client_secret": "",
+            "server_metadata_url": "",
+            "request_token_params": {},
+            "access_token_method": "POST",
+            "access_token_params": {},
+            "authorize_url": "",
+        },
+    }
+]
+
+def get_oauth_user_info(provider, response=None):
+    """Map JWT claims to Superset user and role."""
+    if provider == "supabase":
+        token = response.get("access_token")
+        if not token:
+            return {}
+        try:
+            payload = jwt.decode(
+                token,
+                os.environ.get("SUPABASE_JWT_SECRET"),
+                algorithms=["HS256"]
+            )
+            app_metadata = payload.get("app_metadata", {}) or payload.get("raw_app_meta_data", {})
+            
+            role_mapping = {
+                "owner": "Admin",
+                "admin": "Admin",
+                "member": "Alpha",
+                "viewer": "Gamma",
+            }
+            jwt_role = app_metadata.get("tenant_role", "viewer")
+            superset_role = role_mapping.get(jwt_role, "Gamma")
+            
+            return {
+                "username": payload.get("email", "").split("@")[0],
+                "email": payload.get("email", ""),
+                "first_name": payload.get("user_metadata", {}).get("full_name", ""),
+                "last_name": "",
+                "role": superset_role,
+                "tenant_id": app_metadata.get("tenant_id"),
+                "subscribed_services": app_metadata.get("subscribed_services", []),
+            }
+        except Exception as e:
+            logger.error(f"Error decoding JWT: {str(e)}")
+            return {}
+    return {}
+
+# ============================================================
+# SUPABASE JWT AUTHENTICATION (via AuthKit)
 # ============================================================
 
 from superset.security import SupersetSecurityManager
@@ -96,10 +166,8 @@ _jwt_provider = CustomJwtProvider(
 )
 
 # ============================================================
-# ⭐ FIXED: ROLE MAPPING (Define _role_mapper before using it)
+# ⭐ FIXED: ROLE MAPPING (Uncommented)
 # ============================================================
-
-ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
 
 _role_mapper = RoleMapper(
     mapping={
@@ -109,7 +177,7 @@ _role_mapper = RoleMapper(
         "viewer": ["Gamma"],
     },
     default_roles=("Gamma",),
-    allowed_roles=ALLOWED_ROLES,
+    allowed_roles=["Admin", "Alpha", "Gamma"],
     allow_native_admin=True,
 )
 
@@ -131,24 +199,10 @@ BLUEPRINTS = [create_sso_blueprint()]
 FLASK_APP_MUTATOR = init_app
 
 # ============================================================
-# MULTI-TENANT RLS
-# ============================================================
-
-class CustomTenantContext(TenantContext):
-    @classmethod
-    def get_tenant_id(cls):
-        from flask import g
-        return getattr(g.user, 'tenant_id', None) if hasattr(g, 'user') else None
-
-JINJA_CONTEXT_ADDONS = {
-    "current_tenant": CustomTenantContext.get_tenant_id,
-}
-
-# ============================================================
 # AUTH BLUEPRINT (SSO Endpoints)
 # ============================================================
 
-from flask import Blueprint, request, redirect, session, jsonify
+from flask import Blueprint, request, redirect, session
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -168,42 +222,34 @@ def unauthorized():
 
 @auth_bp.route('/sso')
 def sso_callback():
-    """Handle SSO callback from PrimeLakeHouse"""
     token = request.args.get('token')
     if not token:
         return redirect('https://www.primelakehouse.com/login')
-    
     try:
         payload = jwt.decode(
             token,
             os.environ.get('SUPABASE_JWT_SECRET'),
             algorithms=['HS256']
         )
-        
-        # Store user in session
         session['access_token'] = token
         session['user'] = {
             'email': payload.get('email'),
             'tenant_id': payload.get('app_metadata', {}).get('tenant_id'),
             'role': payload.get('app_metadata', {}).get('tenant_role', 'viewer')
         }
-        
         response = redirect('/superset/dashboard/')
         response.set_cookie('access_token', token, httponly=True, secure=True)
         return response
-        
     except Exception as e:
         logger.error(f"SSO error: {str(e)}")
         return redirect('https://www.primelakehouse.com/login')
 
 @auth_bp.route('/login')
 def custom_login_redirect():
-    """Redirect all login attempts to PrimeLakeHouse"""
     if session.get('user'):
         return redirect('/superset/dashboard/')
-    return redirect('https://www.primelakehouse.com/login?return_to=https://bi.revoseek.com/auth/sso')
+    return redirect('https://www.primelakehouse.com/login')
 
-# Register the blueprint
 BLUEPRINTS.append(auth_bp)
 
 # ============================================================
@@ -212,11 +258,9 @@ BLUEPRINTS.append(auth_bp)
 
 AUTH_ROLE_PUBLIC = None
 PUBLIC_ROLE_LIKE_GAMMA = False
-ENABLE_OAUTH = False
 
 # ============================================================
-# ENVIRONMENT VARIABLES FOR SSO
+# LOGOUT REDIRECT
 # ============================================================
 
-PRIMELAKEHOUSE_URL = os.environ.get("PRIMELAKEHOUSE_URL", "https://www.primelakehouse.com")
-SUPERSET_URL = os.environ.get("SUPERSET_URL", "https://bi.revoseek.com")
+LOGOUT_REDIRECT_URL = 'https://www.primelakehouse.com/logout'
