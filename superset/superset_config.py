@@ -113,6 +113,10 @@ _role_mapper = RoleMapper(
     allow_native_admin=True,
 )
 
+# ============================================================
+# ⭐ FIXED: CUSTOM SECURITY MANAGER (No auth_view_class)
+# ============================================================
+
 CUSTOM_SECURITY_MANAGER = build_manager(
     SupersetSecurityManager,
     identity_provider=_jwt_provider,
@@ -141,10 +145,19 @@ JINJA_CONTEXT_ADDONS = {
 }
 
 # ============================================================
+# ⭐ DISABLE NATIVE LOGIN (Without auth_view_class)
+# ============================================================
+
+# Disable Superset's built-in login form
+AUTH_ROLE_PUBLIC = None
+PUBLIC_ROLE_LIKE_GAMMA = False
+ENABLE_OAUTH = False
+
+# ============================================================
 # ⭐ CUSTOM BLUEPRINT FOR AUTH
 # ============================================================
 
-from flask import Blueprint, request, redirect, session, jsonify
+from flask import Blueprint, request, redirect, session
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -168,7 +181,6 @@ def unauthorized():
                 border-radius: 5px;
                 margin-top: 20px;
             }
-            .btn:hover { background: #2980b9; }
         </style>
     </head>
     <body>
@@ -177,8 +189,6 @@ def unauthorized():
             <p>You need to subscribe to Superset to access this service.</p>
             <p>Please subscribe through your account settings.</p>
             <a href="https://www.primelakehouse.com/subscription" class="btn">Subscribe Now</a>
-            <br>
-            <a href="https://www.primelakehouse.com" class="btn" style="background: #2ecc71; margin-top: 10px;">Go to Dashboard</a>
         </div>
     </body>
     </html>
@@ -218,8 +228,6 @@ def sso_callback():
         response.set_cookie('access_token', token, httponly=True, secure=True)
         return response
         
-    except jwt.ExpiredSignatureError:
-        return redirect('https://www.primelakehouse.com/login?reason=expired')
     except Exception as e:
         logger.error(f"SSO error: {str(e)}")
         return redirect('https://www.primelakehouse.com/login')
@@ -235,26 +243,14 @@ def custom_login_redirect():
 BLUEPRINTS.append(auth_bp)
 
 # ============================================================
-# ⭐ DISABLE NATIVE LOGIN (Important!)
-# ============================================================
-
-# Disable Superset's built-in login form
-AUTH_ROLE_PUBLIC = None
-PUBLIC_ROLE_LIKE_GAMMA = False
-ENABLE_OAUTH = False
-
-# Prevent user creation via UI
-CUSTOM_SECURITY_MANAGER = build_manager(
-    SupersetSecurityManager,
-    identity_provider=_jwt_provider,
-    role_mapper=_role_mapper,
-    # Disable default login view
-    auth_view_class=None,
-)
-
-# ============================================================
 # LOGOUT REDIRECT
 # ============================================================
 
-# Redirect logout to PrimeLakeHouse
 LOGOUT_REDIRECT_URL = 'https://www.primelakehouse.com/logout'
+
+# ============================================================
+# ENVIRONMENT VARIABLES FOR SSO
+# ============================================================
+
+PRIMELAKEHOUSE_URL = os.environ.get("PRIMELAKEHOUSE_URL", "https://www.primelakehouse.com")
+SUPERSET_URL = os.environ.get("SUPERSET_URL", "https://bi.revoseek.com")
