@@ -6,13 +6,13 @@ from urllib.parse import quote_plus
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ⭐ FIXED: Enable role reconciler (was False)
+# ⭐ FIXED: Enable role reconciler
 # ============================================================
 
 SAK_DISABLE_RECONCILER = False
 
 # ============================================================
-# ⭐ FIXED: ENABLE OAUTH (was False - CRITICAL FOR SSO!)
+# ⭐ FIXED: ENABLE OAUTH (CRITICAL FOR SSO)
 # ============================================================
 
 ENABLE_OAUTH = True
@@ -47,27 +47,6 @@ CACHE_CONFIG = {
     "CACHE_REDIS_URL": f"redis://:{redis_password}@{redis_host}:{redis_port}/1",
 }
 
-DATA_CACHE_CONFIG = {
-    "CACHE_TYPE": "RedisCache",
-    "CACHE_DEFAULT_TIMEOUT": 300,
-    "CACHE_KEY_PREFIX": "superset_data_",
-    "CACHE_REDIS_URL": f"redis://:{redis_password}@{redis_host}:{redis_port}/2",
-}
-
-FILTER_STATE_CACHE_CONFIG = {
-    "CACHE_TYPE": "RedisCache",
-    "CACHE_DEFAULT_TIMEOUT": 86400,
-    "CACHE_KEY_PREFIX": "superset_filter_",
-    "CACHE_REDIS_URL": f"redis://:{redis_password}@{redis_host}:{redis_port}/3",
-}
-
-EXPLORE_FORM_DATA_CACHE_CONFIG = {
-    "CACHE_TYPE": "RedisCache",
-    "CACHE_DEFAULT_TIMEOUT": 86400,
-    "CACHE_KEY_PREFIX": "superset_explore_",
-    "CACHE_REDIS_URL": f"redis://:{redis_password}@{redis_host}:{redis_port}/4",
-}
-
 WTF_CSRF_ENABLED = True
 TALISMAN_ENABLED = False
 ENABLE_PROXY_FIX = True
@@ -100,7 +79,6 @@ OAUTH_PROVIDERS = [
 ]
 
 def get_oauth_user_info(provider, response=None):
-    """Map JWT claims to Superset user and role."""
     if provider == "supabase":
         token = response.get("access_token")
         if not token:
@@ -114,12 +92,13 @@ def get_oauth_user_info(provider, response=None):
             app_metadata = payload.get("app_metadata", {}) or payload.get("raw_app_meta_data", {})
             
             role_mapping = {
+                "authenticated": "Gamma",  # ⭐ JWT default role
                 "owner": "Admin",
                 "admin": "Admin",
                 "member": "Alpha",
                 "viewer": "Gamma",
             }
-            jwt_role = app_metadata.get("tenant_role", "viewer")
+            jwt_role = app_metadata.get("tenant_role", "authenticated")
             superset_role = role_mapping.get(jwt_role, "Gamma")
             
             return {
@@ -137,7 +116,7 @@ def get_oauth_user_info(provider, response=None):
     return {}
 
 # ============================================================
-# SUPABASE JWT AUTHENTICATION (via AuthKit)
+# SUPABASE JWT AUTHENTICATION
 # ============================================================
 
 from superset.security import SupersetSecurityManager
@@ -147,15 +126,11 @@ from superset_auth_kit.security.manager import build_manager
 from superset_auth_kit.sync.role_mapper import RoleMapper
 from superset_auth_kit.tenant.context import TenantContext
 
-# ============================================================
-# CUSTOM JWT PROVIDER
-# ============================================================
-
 class CustomJwtProvider(JwtProvider):
     def get_claims(self, payload):
         claims = super().get_claims(payload)
         app_metadata = payload.get("app_metadata", {}) or payload.get("raw_app_meta_data", {})
-        claims["role"] = app_metadata.get("tenant_role", "viewer")
+        claims["role"] = app_metadata.get("tenant_role", "authenticated")
         claims["tenant_id"] = app_metadata.get("tenant_id")
         claims["subscribed_services"] = app_metadata.get("subscribed_services", [])
         return claims
@@ -166,11 +141,12 @@ _jwt_provider = CustomJwtProvider(
 )
 
 # ============================================================
-# ⭐ FIXED: ROLE MAPPING (Uncommented)
+# ⭐ FIXED: ROLE MAPPING (With "authenticated" mapping)
 # ============================================================
 
 _role_mapper = RoleMapper(
     mapping={
+        "authenticated": ["Gamma"],  # ⭐ JWT default role
         "owner": ["Admin"],
         "admin": ["Admin"],
         "member": ["Alpha"],
@@ -180,10 +156,6 @@ _role_mapper = RoleMapper(
     allowed_roles=["Admin", "Alpha", "Gamma"],
     allow_native_admin=True,
 )
-
-# ============================================================
-# CUSTOM SECURITY MANAGER
-# ============================================================
 
 CUSTOM_SECURITY_MANAGER = build_manager(
     SupersetSecurityManager,
@@ -199,7 +171,7 @@ BLUEPRINTS = [create_sso_blueprint()]
 FLASK_APP_MUTATOR = init_app
 
 # ============================================================
-# AUTH BLUEPRINT (SSO Endpoints)
+# AUTH BLUEPRINT
 # ============================================================
 
 from flask import Blueprint, request, redirect, session
@@ -209,15 +181,9 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 @auth_bp.route('/unauthorized')
 def unauthorized():
     return """
-    <!DOCTYPE html>
-    <html>
-    <head><title>Subscription Required</title></head>
-    <body style="font-family: Arial; text-align: center; padding: 50px;">
-        <h1>🔒 Subscription Required</h1>
-        <p>You need to subscribe to Superset to access this service.</p>
-        <a href="https://www.primelakehouse.com/subscription">Subscribe Now</a>
-    </body>
-    </html>
+    <h1>🔒 Subscription Required</h1>
+    <p>You need to subscribe to Superset to access this service.</p>
+    <a href="https://www.primelakehouse.com/subscription">Subscribe Now</a>
     """
 
 @auth_bp.route('/sso')
@@ -235,7 +201,7 @@ def sso_callback():
         session['user'] = {
             'email': payload.get('email'),
             'tenant_id': payload.get('app_metadata', {}).get('tenant_id'),
-            'role': payload.get('app_metadata', {}).get('tenant_role', 'viewer')
+            'role': payload.get('app_metadata', {}).get('tenant_role', 'authenticated')
         }
         response = redirect('/superset/dashboard/')
         response.set_cookie('access_token', token, httponly=True, secure=True)
@@ -258,9 +224,5 @@ BLUEPRINTS.append(auth_bp)
 
 AUTH_ROLE_PUBLIC = None
 PUBLIC_ROLE_LIKE_GAMMA = False
-
-# ============================================================
-# LOGOUT REDIRECT
-# ============================================================
 
 LOGOUT_REDIRECT_URL = 'https://www.primelakehouse.com/logout'
