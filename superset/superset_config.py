@@ -96,29 +96,25 @@ _jwt_provider = CustomJwtProvider(
 )
 
 # ============================================================
-# FIXED: ROLE MAPPING
+# ⭐ FIXED: ROLE MAPPING (Define _role_mapper before using it)
 # ============================================================
 
-# Option 1: Disable role reconciler entirely
-SAK_DISABLE_RECONCILER = True
+ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
 
-# Option 2: Or fix the mapping
-# ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
-# 
-# _role_mapper = RoleMapper(
-#     mapping={
-#         "owner": ["Admin"],
-#         "admin": ["Admin"],
-#         "member": ["Alpha"],
-#         "viewer": ["Gamma"],
-#     },
-#     default_roles=("Gamma",),
-#     allowed_roles=ALLOWED_ROLES,
-#     allow_native_admin=True,
-# )
+_role_mapper = RoleMapper(
+    mapping={
+        "owner": ["Admin"],
+        "admin": ["Admin"],
+        "member": ["Alpha"],
+        "viewer": ["Gamma"],
+    },
+    default_roles=("Gamma",),
+    allowed_roles=ALLOWED_ROLES,
+    allow_native_admin=True,
+)
 
 # ============================================================
-# ⭐ FIXED: CUSTOM SECURITY MANAGER (No auth_view_class)
+# CUSTOM SECURITY MANAGER
 # ============================================================
 
 CUSTOM_SECURITY_MANAGER = build_manager(
@@ -149,19 +145,10 @@ JINJA_CONTEXT_ADDONS = {
 }
 
 # ============================================================
-# ⭐ DISABLE NATIVE LOGIN (Without auth_view_class)
+# AUTH BLUEPRINT (SSO Endpoints)
 # ============================================================
 
-# Disable Superset's built-in login form
-AUTH_ROLE_PUBLIC = None
-PUBLIC_ROLE_LIKE_GAMMA = False
-ENABLE_OAUTH = False
-
-# ============================================================
-# ⭐ CUSTOM BLUEPRINT FOR AUTH
-# ============================================================
-
-from flask import Blueprint, request, redirect, session
+from flask import Blueprint, request, redirect, session, jsonify
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -170,40 +157,21 @@ def unauthorized():
     return """
     <!DOCTYPE html>
     <html>
-    <head>
-        <title>Subscription Required</title>
-        <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-            .container { max-width: 600px; margin: 0 auto; }
-            h1 { color: #e74c3c; }
-            .btn { 
-                display: inline-block; 
-                padding: 10px 20px; 
-                background: #3498db; 
-                color: white; 
-                text-decoration: none; 
-                border-radius: 5px;
-                margin-top: 20px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🔒 Subscription Required</h1>
-            <p>You need to subscribe to Superset to access this service.</p>
-            <p>Please subscribe through your account settings.</p>
-            <a href="https://www.primelakehouse.com/subscription" class="btn">Subscribe Now</a>
-        </div>
+    <head><title>Subscription Required</title></head>
+    <body style="font-family: Arial; text-align: center; padding: 50px;">
+        <h1>🔒 Subscription Required</h1>
+        <p>You need to subscribe to Superset to access this service.</p>
+        <a href="https://www.primelakehouse.com/subscription">Subscribe Now</a>
     </body>
     </html>
     """
 
 @auth_bp.route('/sso')
 def sso_callback():
-    """Handle SSO callback from PrimeLakeHouse app"""
+    """Handle SSO callback from PrimeLakeHouse"""
     token = request.args.get('token')
     if not token:
-        return redirect('https://www.primelakehouse.com/login?return_to=https://bi.revoseek.com/auth/sso')
+        return redirect('https://www.primelakehouse.com/login')
     
     try:
         payload = jwt.decode(
@@ -212,20 +180,12 @@ def sso_callback():
             algorithms=['HS256']
         )
         
-        app_metadata = payload.get('app_metadata', {}) or payload.get('raw_app_meta_data', {})
-        services = app_metadata.get('subscribed_services', [])
-        if isinstance(services, str):
-            services = [s.strip() for s in services.split(',')]
-        
-        if 'superset' not in services:
-            return redirect('/auth/unauthorized')
-        
         # Store user in session
         session['access_token'] = token
         session['user'] = {
             'email': payload.get('email'),
-            'tenant_id': app_metadata.get('tenant_id'),
-            'role': app_metadata.get('tenant_role', 'viewer')
+            'tenant_id': payload.get('app_metadata', {}).get('tenant_id'),
+            'role': payload.get('app_metadata', {}).get('tenant_role', 'viewer')
         }
         
         response = redirect('/superset/dashboard/')
@@ -243,14 +203,16 @@ def custom_login_redirect():
         return redirect('/superset/dashboard/')
     return redirect('https://www.primelakehouse.com/login?return_to=https://bi.revoseek.com/auth/sso')
 
-# ⭐ Register the blueprint
+# Register the blueprint
 BLUEPRINTS.append(auth_bp)
 
 # ============================================================
-# LOGOUT REDIRECT
+# DISABLE NATIVE LOGIN
 # ============================================================
 
-LOGOUT_REDIRECT_URL = 'https://www.primelakehouse.com/logout'
+AUTH_ROLE_PUBLIC = None
+PUBLIC_ROLE_LIKE_GAMMA = False
+ENABLE_OAUTH = False
 
 # ============================================================
 # ENVIRONMENT VARIABLES FOR SSO
