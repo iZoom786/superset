@@ -2,8 +2,6 @@ import os
 import jwt
 import logging
 from urllib.parse import quote_plus
-from flask import Flask, request, redirect, session, g, jsonify, url_for
-from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -143,16 +141,10 @@ JINJA_CONTEXT_ADDONS = {
 }
 
 # ============================================================
-# ⭐ FIX: FORCE SSO - Disable native login
+# ⭐ FIXED: CUSTOM BLUEPRINT (No current_app usage)
 # ============================================================
 
-# Disable Superset's built-in login
-AUTH_ROLE_PUBLIC = None
-PUBLIC_ROLE_LIKE_GAMMA = False
-ENABLE_OAUTH = False
-
-# Override the login route
-from flask import Blueprint
+from flask import Blueprint, request, redirect, session
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -238,12 +230,10 @@ def custom_login_redirect():
 BLUEPRINTS.append(auth_bp)
 
 # ============================================================
-# OVERRIDE SUPERSET'S LOGIN VIEW
+# DISABLE NATIVE LOGIN
 # ============================================================
 
-# Patch the login view to use our redirect
-from flask import current_app
-
-@current_app.route('/login/', methods=['GET', 'POST'])
-def login_override():
-    return redirect('https://app.revoseek.com/login?return_to=https://bi.revoseek.com/auth/sso')
+# Disable Superset's built-in login
+AUTH_ROLE_PUBLIC = None
+PUBLIC_ROLE_LIKE_GAMMA = False
+ENABLE_OAUTH = False
