@@ -62,7 +62,7 @@ FEATURE_FLAGS = {
 }
 
 # ============================================================
-# SUPABASE JWT AUTHENTICATION (Updated)
+# SUPABASE JWT AUTHENTICATION
 # ============================================================
 
 from superset.security import SupersetSecurityManager
@@ -72,28 +72,8 @@ from superset_auth_kit.security.manager import build_manager
 from superset_auth_kit.sync.role_mapper import RoleMapper
 from superset_auth_kit.tenant.context import TenantContext
 
-# JWT Provider (Supabase)
-_jwt_provider = JwtProvider(
-    secret_or_key=os.environ.get("SUPABASE_JWT_SECRET"),
-    algorithms=["HS256"],
-)
-
 # ============================================================
-# ROLE MAPPING: Supabase app_metadata.tenant_role → Superset Role
-# ============================================================
-
-_role_mapper = RoleMapper(
-    mapping={
-        "owner": ["Admin"],      # tenant_role 'owner' → Superset 'Admin'
-        "admin": ["Admin"],      # tenant_role 'admin' → Superset 'Admin'
-        "member": ["Alpha"],     # tenant_role 'member' → Superset 'Alpha'
-        "viewer": ["Gamma"],     # tenant_role 'viewer' → Superset 'Gamma'
-    },
-    default_roles=("Gamma",),    # Default for unknown roles
-)
-
-# ============================================================
-# CUSTOM CLAIMS EXTRACTOR (For JWT fields)
+# CUSTOM JWT PROVIDER (Reads from app_metadata)
 # ============================================================
 
 class CustomJwtProvider(JwtProvider):
@@ -102,19 +82,35 @@ class CustomJwtProvider(JwtProvider):
     def get_claims(self, payload):
         claims = super().get_claims(payload)
         
-        # Read role from app_metadata.tenant_role
+        # Read from app_metadata (correct location)
         app_metadata = payload.get("app_metadata", {})
         claims["role"] = app_metadata.get("tenant_role", "viewer")
-        
-        # Read tenant_id from app_metadata.tenant_id
         claims["tenant_id"] = app_metadata.get("tenant_id")
         
         return claims
 
-# Use custom provider
+# JWT Provider
 _jwt_provider = CustomJwtProvider(
     secret_or_key=os.environ.get("SUPABASE_JWT_SECRET"),
     algorithms=["HS256"],
+)
+
+# ============================================================
+# ROLE MAPPING (With allowed_roles)
+# ============================================================
+
+# Define allowed Superset roles
+ALLOWED_ROLES = ["Admin", "Alpha", "Gamma"]
+
+_role_mapper = RoleMapper(
+    mapping={
+        "owner": ["Admin"],
+        "admin": ["Admin"],
+        "member": ["Alpha"],
+        "viewer": ["Gamma"],
+    },
+    default_roles=("Gamma",),
+    allowed_roles=ALLOWED_ROLES,
 )
 
 # ============================================================
@@ -122,13 +118,10 @@ _jwt_provider = CustomJwtProvider(
 # ============================================================
 
 class CustomTenantContext(TenantContext):
-    """Custom tenant context that reads tenant_id from app_metadata"""
-    
     @classmethod
     def get_tenant_id(cls):
-        """Returns tenant_id from the current user's JWT"""
         from flask import g
-        return g.user.tenant_id if hasattr(g, 'user') else None
+        return getattr(g.user, 'tenant_id', None) if hasattr(g, 'user') else None
 
 # Build Security Manager
 CUSTOM_SECURITY_MANAGER = build_manager(
