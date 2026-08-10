@@ -1,4 +1,24 @@
 services:
+  cube:
+    image: cubejs/cube:latest
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+      - "15432:15432"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      CUBEJS_DEV_MODE: true
+      CUBEJS_DB_TYPE: postgres
+      CUBEJS_DB_HOST: 187.127.189.166
+      CUBEJS_DB_PORT: ${CUBEJS_DB_PORT:-5432}
+      CUBEJS_DB_NAME: ${CUBEJS_DB_NAME:-tradebase}
+      CUBEJS_DB_USER: ${CUBEJS_DB_USER:-postgres}
+      CUBEJS_DB_PASS: postgres
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+    volumes:
+      - ./cube:/cube/conf
+    networks:
+      - tradebase_net
   superset:
     image: amancevice/superset:6.0.0
     container_name: superset
