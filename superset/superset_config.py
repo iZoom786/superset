@@ -6,13 +6,13 @@ from urllib.parse import quote_plus
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ⭐ FIXED: Enable role reconciler
+# ⭐ DISABLE AUTHKIT ROLE RECONCILER COMPLETELY
 # ============================================================
 
-SAK_DISABLE_RECONCILER = False
+SAK_DISABLE_RECONCILER = True
 
 # ============================================================
-# ⭐ FIXED: ENABLE OAUTH (CRITICAL FOR SSO)
+# ⭐ ENABLE OAUTH
 # ============================================================
 
 ENABLE_OAUTH = True
@@ -79,6 +79,7 @@ OAUTH_PROVIDERS = [
 ]
 
 def get_oauth_user_info(provider, response=None):
+    """Map JWT claims to Superset user and role."""
     if provider == "supabase":
         token = response.get("access_token")
         if not token:
@@ -91,8 +92,9 @@ def get_oauth_user_info(provider, response=None):
             )
             app_metadata = payload.get("app_metadata", {}) or payload.get("raw_app_meta_data", {})
             
+            # Role mapping
             role_mapping = {
-                "authenticated": "Gamma",  # ⭐ JWT default role
+                "authenticated": "Gamma",
                 "owner": "Admin",
                 "admin": "Admin",
                 "member": "Alpha",
@@ -116,15 +118,13 @@ def get_oauth_user_info(provider, response=None):
     return {}
 
 # ============================================================
-# SUPABASE JWT AUTHENTICATION
+# SUPABASE JWT AUTHENTICATION (Minimal)
 # ============================================================
 
 from superset.security import SupersetSecurityManager
 from superset_auth_kit.api.blueprint import create_sso_blueprint, init_app
 from superset_auth_kit.providers.jwt import JwtProvider
 from superset_auth_kit.security.manager import build_manager
-from superset_auth_kit.sync.role_mapper import RoleMapper
-from superset_auth_kit.tenant.context import TenantContext
 
 class CustomJwtProvider(JwtProvider):
     def get_claims(self, payload):
@@ -132,7 +132,6 @@ class CustomJwtProvider(JwtProvider):
         app_metadata = payload.get("app_metadata", {}) or payload.get("raw_app_meta_data", {})
         claims["role"] = app_metadata.get("tenant_role", "authenticated")
         claims["tenant_id"] = app_metadata.get("tenant_id")
-        claims["subscribed_services"] = app_metadata.get("subscribed_services", [])
         return claims
 
 _jwt_provider = CustomJwtProvider(
@@ -140,32 +139,11 @@ _jwt_provider = CustomJwtProvider(
     algorithms=["HS256"],
 )
 
-# ============================================================
-# ⭐ FIXED: ROLE MAPPING (With "authenticated" mapping)
-# ============================================================
-
-_role_mapper = RoleMapper(
-    mapping={
-        "authenticated": ["Gamma"],  # ⭐ JWT default role
-        "owner": ["Admin"],
-        "admin": ["Admin"],
-        "member": ["Alpha"],
-        "viewer": ["Gamma"],
-    },
-    default_roles=("Gamma",),
-    allowed_roles=["Admin", "Alpha", "Gamma"],
-    allow_native_admin=True,
-)
-
+# ⭐ Minimal security manager (no role mapper)
 CUSTOM_SECURITY_MANAGER = build_manager(
     SupersetSecurityManager,
     identity_provider=_jwt_provider,
-    role_mapper=_role_mapper,
 )
-
-# ============================================================
-# SSO BLUEPRINT
-# ============================================================
 
 BLUEPRINTS = [create_sso_blueprint()]
 FLASK_APP_MUTATOR = init_app
@@ -224,5 +202,4 @@ BLUEPRINTS.append(auth_bp)
 
 AUTH_ROLE_PUBLIC = None
 PUBLIC_ROLE_LIKE_GAMMA = False
-
 LOGOUT_REDIRECT_URL = 'https://www.primelakehouse.com/logout'
